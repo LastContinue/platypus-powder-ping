@@ -6,6 +6,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use tabled::Table;
 use tabled::settings::object::{Columns, Rows};
 use tabled::settings::{Color, Style};
+use which::which;
 
 use crate::package::Package;
 
@@ -52,8 +53,8 @@ pub fn notify_updates(updates: &[String]) -> Result<()> {
         updates.join("\n• ")
     );
 
-    let (output, cmd_name) = if Command::new(NOTIFIER_APP).spawn().is_ok() {
-        (
+    let (output, cmd_name) = match which(NOTIFIER_APP) {
+        Ok(_) => (
             Command::new(NOTIFIER_APP)
                 .arg("--title")
                 .arg(NOTIFICATION_TITLE)
@@ -62,9 +63,8 @@ pub fn notify_updates(updates: &[String]) -> Result<()> {
                 .output()
                 .context("failed to run `{NOTIFIER_APP}`")?,
             NOTIFIER_APP,
-        )
-    } else {
-        (
+        ),
+        Err(_) => (
             Command::new(NOTIFIER_FALLBACK)
                 .arg("-e")
                 .arg(format!(
@@ -74,7 +74,7 @@ pub fn notify_updates(updates: &[String]) -> Result<()> {
                 .output()
                 .context("failed to run `{NOTIFIER_FALLBACK}`")?,
             NOTIFIER_FALLBACK,
-        )
+        ),
     };
 
     if !output.status.success() {
