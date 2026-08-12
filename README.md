@@ -9,6 +9,8 @@ Small Rust program for checking Nix Darwin packages for updates
 This is where the name originated. Probably too long, but anything with a possible animal mascot tie-in is a bonus as far as I'm concerned.
 It can easily be alias'ed.
 
+<img width="355" height="562" alt="ppp-output" src="https://github.com/user-attachments/assets/130ec2c4-fe9b-4e25-8d74-b90efb97774c" />
+
 ## Background
 
 I originally wanted to find a way to see if I had any updates in my [Nix Darwin](https://github.com/nix-darwin/nix-darwin) setup.
@@ -54,6 +56,9 @@ This program can send notifications. I screwed around with several apps and Rust
 
 [macos-notifier](https://github.com/pixelperfectat/macos-cli-notifier)  
 Blog post by author [here](https://thecoder.io/blog/native-macos-notifications-from-the-command-line-without-terminal-notifier)
+
+<img width="360" height="97" alt="macos-notifier" src="https://github.com/user-attachments/assets/5c29a571-bb3f-43d3-a8e9-9d54b0c4c95b" />
+
 
 > That is lame and I don't want to download anything
 
