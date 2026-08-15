@@ -23,3 +23,7 @@ pub trait GetsJSON {
         current_version: &str,
     ) -> Result<Option<String>>;
 }
+
+pub trait ProvidesHostname {
+    fn get_hostname(&self) -> Result<String>;
+}

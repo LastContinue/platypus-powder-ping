@@ -1,54 +1,52 @@
-use anyhow::Result;
-use regex::Regex;
 use std::process::Output;
 
 pub fn string_from_std(cmd: &Output) -> String {
     String::from_utf8_lossy(&cmd.stdout).into_owned()
 }
 
-pub fn expand_if_env_var(input: &str) -> Result<String> {
-    let re = Regex::new(r"^\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)$")?;
-
-    if let Some(caps) = re.captures(input) {
-        let var_name = caps
-            .get(1)
-            .or_else(|| caps.get(2))
-            .map_or("", |m| m.as_str());
-
-        Ok(std::env::var(var_name)?)
-    } else {
-        Ok(input.to_string())
-    }
-}
-
 #[cfg(test)]
-mod env_var_test {
-    use super::expand_if_env_var;
+mod tests {
+    use super::*;
+    use std::process::Output;
 
     #[test]
-    fn existing_env_var_is_expanded() {
-        let home = "$HOME";
-        // we're not sure what $HOME is on various systems, but it will exist
-        // and shouldn't be the same as the literal "$HOME"
-        assert_ne!(home, expand_if_env_var(home).unwrap())
+    fn test_valid_utf8() {
+        let output = Output {
+            status: std::process::ExitStatus::default(),
+            stdout: b"testing".to_vec(),
+            stderr: vec![],
+        };
+        assert_eq!(string_from_std(&output), "testing");
     }
 
     #[test]
-    fn existing_brace_y_env_var_is_expanded() {
-        let brace_y_home = "${HOME}";
-        assert_ne!(brace_y_home, expand_if_env_var(brace_y_home).unwrap());
+    fn test_invalid_utf8_replacement() {
+        let output = Output {
+            status: std::process::ExitStatus::default(),
+            stdout: vec![0xFF, 0xFE],
+            stderr: vec![],
+        };
+        let result = string_from_std(&output);
+        assert!(!result.is_empty());
     }
 
     #[test]
-    fn missing_env_var_is_err() {
-        let not_found = "$UN_FOUND";
-        assert!(expand_if_env_var(not_found).is_err())
+    fn test_empty_stdout() {
+        let output = Output {
+            status: std::process::ExitStatus::default(),
+            stdout: vec![],
+            stderr: vec![],
+        };
+        assert_eq!(string_from_std(&output), "");
     }
 
     #[test]
-    fn regular_string_is_passed_through() {
-        let other = "/some/other/path";
-        let maybe_expanded_other = expand_if_env_var(other);
-        assert_eq!(other, maybe_expanded_other.unwrap())
+    fn test_multiline_output() {
+        let output = Output {
+            status: std::process::ExitStatus::default(),
+            stdout: b"Line 1\nLine 2\nLine 3".to_vec(),
+            stderr: vec![],
+        };
+        assert_eq!(string_from_std(&output), "Line 1\nLine 2\nLine 3");
     }
 }

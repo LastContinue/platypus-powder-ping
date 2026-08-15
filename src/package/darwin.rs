@@ -1,9 +1,8 @@
-use std::process::Command;
+use crate::{config::ConfigPkgs, package::traits::ProvidesHostname};
 
-use crate::config::ConfigPkgs;
-
-use super::{GetsJSON, GetsPackages, Package, expand_if_env_var, string_from_std};
+use super::{GetsJSON, GetsPackages, Package};
 use anyhow::{Context, Result};
+use shellexpand::env;
 
 pub struct Darwin<G>
 where
@@ -18,19 +17,17 @@ impl<G> Darwin<G>
 where
     G: GetsJSON + Send + Sync,
 {
-    pub fn new(flake_dir: String, flake_config_name: Option<String>, json_gen: G) -> Result<Self> {
-        let path = expand_if_env_var(flake_dir.as_str())?;
+    pub fn new(
+        flake_dir: String,
+        flake_config_name: Option<String>,
+        json_gen: G,
+        hostname_provider: &impl ProvidesHostname,
+    ) -> Result<Self> {
+        let path = env(flake_dir.as_str())?.to_string();
 
         let config_name = match flake_config_name {
-            Some(n) => expand_if_env_var(n.as_str())?,
-            // User maybe using "config as hostname -s" trick to keep from having to specify the config name
-            None => {
-                let hostname = Command::new("hostname")
-                    .arg("-s")
-                    .output()
-                    .context("`hostname -s` encountered an issue")?;
-                string_from_std(&hostname).trim().to_string()
-            }
+            Some(n) => env(n.as_str())?.to_string(),
+            None => hostname_provider.get_hostname()?.trim().to_string(),
         };
 
         Ok(Darwin {
@@ -105,9 +102,19 @@ mod test {
 
     use indicatif::ProgressBar;
 
-    use crate::{ProgressConfig, config::ConfigPkgs, run};
+    use crate::{ProgressConfig, config::ConfigPkgs, package::traits::ProvidesHostname, run};
 
     use super::*;
+
+    struct MockHostnameProvider {
+        hostname: String,
+    }
+
+    impl ProvidesHostname for MockHostnameProvider {
+        fn get_hostname(&self) -> Result<String> {
+            Ok(self.hostname.clone())
+        }
+    }
 
     struct MockEval<F>
     where
@@ -143,7 +150,16 @@ mod test {
         }
     }
 
-    fn get_test_darwin<G>(json_gen: G) -> Result<Darwin<G>>
+    fn get_mock_hostname_provider() -> MockHostnameProvider {
+        MockHostnameProvider {
+            hostname: "test-host".to_string(),
+        }
+    }
+
+    fn get_test_darwin<G>(
+        json_gen: G,
+        hostname_provider: &impl ProvidesHostname,
+    ) -> Result<Darwin<G>>
     where
         G: GetsJSON + Send + Sync,
     {
@@ -151,9 +167,62 @@ mod test {
             "/some/dir".to_string(),
             Some("config name".to_string()),
             json_gen,
+            hostname_provider,
         )?;
 
         Ok(darwin)
+    }
+
+    #[test]
+    fn test_uses_provided_config_name() {
+        let eval = MockEval {
+            package_logic: |_| "blank".to_string(),
+        };
+
+        let mock_hostname = MockHostnameProvider {
+            hostname: "test-host".to_string(),
+        };
+
+        // This should use the provided config name, not hostname
+        let result = Darwin::new(
+            "/some/path".to_string(),
+            Some("config-name".to_string()),
+            eval,
+            &mock_hostname,
+        );
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().config_name, "config-name");
+    }
+
+    #[test]
+    fn test_falls_back_to_hostname() {
+        let eval = MockEval {
+            package_logic: |_| "blank".to_string(),
+        };
+
+        let mock_hostname = MockHostnameProvider {
+            hostname: "fallback".to_string(),
+        };
+
+        let result = Darwin::new("/some/path".to_string(), None, eval, &mock_hostname);
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().config_name, "fallback");
+    }
+
+    #[test]
+    fn test_hostname_trimmed() {
+        let eval = MockEval {
+            package_logic: |_| "blank".to_string(),
+        };
+        let mock_hostname = MockHostnameProvider {
+            hostname: "  spacey-hostname  ".to_string(),
+        };
+
+        let result = Darwin::new("/some/path".to_string(), None, eval, &mock_hostname);
+
+        assert_eq!(result.unwrap().config_name, "spacey-hostname");
     }
 
     #[test]
@@ -170,7 +239,7 @@ mod test {
             },
         };
 
-        let flake = get_test_darwin(eval)?;
+        let flake = get_test_darwin(eval, &get_mock_hostname_provider())?;
 
         let pkgs = ConfigPkgs {
             ignore: vec!["codebook".into()],
@@ -204,7 +273,7 @@ mod test {
             overrides: HashMap::from([("ripgrep".into(), "rg".into())]),
         };
 
-        let flake = get_test_darwin(eval)?;
+        let flake = get_test_darwin(eval, &get_mock_hostname_provider())?;
 
         let rs = run(&flake, pkgs, get_fake_output_config())?;
 
@@ -234,7 +303,7 @@ mod test {
             overrides: HashMap::new(),
         };
 
-        let flake = get_test_darwin(eval)?;
+        let flake = get_test_darwin(eval, &get_mock_hostname_provider())?;
 
         let rs = run(&flake, pkgs, get_fake_output_config())?;
 

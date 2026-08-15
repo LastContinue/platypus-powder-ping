@@ -1,10 +1,10 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 use indicatif::ParallelProgressIterator;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use std::time::Instant;
+use std::{process::Command, time::Instant};
 mod package;
-use package::{Darwin, GetsPackages, NixEval, Package};
+use package::{Darwin, GetsPackages, NixEval, Package, ProvidesHostname, string_from_std};
 mod config;
 use config::{Config, ConfigPkgs, load_config, resolve_config_path};
 mod output;
@@ -31,6 +31,18 @@ struct RunSummary {
     pub update_names: Vec<String>,
 }
 
+struct MacOsHostnameCmd;
+
+impl ProvidesHostname for MacOsHostnameCmd {
+    fn get_hostname(&self) -> Result<String> {
+        let hostname = Command::new("hostname")
+            .arg("-s")
+            .output()
+            .context("`hostname -s` encountered an issue")?;
+        Ok(string_from_std(&hostname))
+    }
+}
+
 fn main() -> Result<()> {
     let now = Instant::now();
     let args = Args::parse();
@@ -39,7 +51,12 @@ fn main() -> Result<()> {
     let config_path = resolve_config_path(&args, &home);
     let cfg: Config = load_config(&config_path)?;
 
-    let flake = Darwin::new(cfg.flake_dir, cfg.flake_config_name, NixEval {})?;
+    let flake = Darwin::new(
+        cfg.flake_dir,
+        cfg.flake_config_name,
+        NixEval {},
+        &MacOsHostnameCmd,
+    )?;
 
     let progress_config = ProgressConfig {
         spinner: query_flake_spinner(),

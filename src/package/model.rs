@@ -11,6 +11,25 @@ pub struct Package {
     pub update: Option<String>,
 }
 
+// This is for Serde parsing only
 fn display_update(update: &Option<String>) -> String {
     update.as_deref().unwrap_or("").to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_unwraps_some() {
+        let text = "Optional Update".to_string();
+        let update = Some(text.clone());
+
+        assert_eq!(text, display_update(&update))
+    }
+
+    #[test]
+    fn test_unwraps_none() {
+        assert_eq!("".to_string(), display_update(&None))
+    }
 }

@@ -1,6 +1,7 @@
 use crate::Args;
 use anyhow::{Context, Result};
 use serde::Deserialize;
+use shellexpand::tilde_with_context;
 use std::collections::HashMap;
 use std::fs;
 
@@ -36,17 +37,11 @@ pub fn resolve_config_path(args: &Args, home: &str) -> String {
         Some(path) => path,
         None => FALLBACK_CONFIG_PATH,
     };
-    expand_tilde_with_home(raw, home)
-}
 
-fn expand_tilde_with_home(input: &str, home: &str) -> String {
-    if let Some(rest) = input.strip_prefix("~/") {
-        format!("{}/{}", home, rest)
-    } else if input == "~" {
-        home.to_string()
-    } else {
-        input.to_string()
-    }
+    // Little weird, but better than rolling own tilde expander
+    let home_fn = || Some(home);
+
+    tilde_with_context(raw, home_fn).into()
 }
 
 #[cfg(test)]
@@ -73,43 +68,5 @@ mod tests {
         let resolved = resolve_config_path(&args, "/home/testuser");
 
         assert_eq!(resolved, "/home/testuser/.config/x.toml");
-    }
-
-    #[test]
-    fn expands_tilde_path_with_tilde() {
-        let home = "/home/user";
-        let path_with_home = "/home/user/good/path";
-        let path_with_tilde = "~/good/path";
-
-        // Need to figure out how to do a table test for this
-        assert_eq!(
-            path_with_home,
-            expand_tilde_with_home(path_with_tilde, home)
-        );
-    }
-
-    #[test]
-    fn expands_tilde_plain_path() {
-        let home = "/home/user";
-        let regular_path = "/a/regular/path";
-        assert_eq!(
-            regular_path,
-            expand_tilde_with_home("/a/regular/path", home)
-        );
-    }
-
-    #[test]
-    fn expands_tilde_only_tilde() {
-        let home = "/home/user";
-        let only_tilde = "~";
-        assert_eq!(home, expand_tilde_with_home(only_tilde, home));
-    }
-
-    #[test]
-    fn expands_tilde_empty_string() {
-        let home = "/home/user";
-
-        let nothing = "";
-        assert_eq!(nothing, expand_tilde_with_home(nothing, home));
     }
 }
