@@ -103,23 +103,11 @@ where
 mod test {
     use std::collections::HashMap;
 
-    use crate::{ProgressConfig, config::ConfigPkgs, output::TracksProgress, run};
+    use indicatif::ProgressBar;
+
+    use crate::{ProgressConfig, config::ConfigPkgs, run};
 
     use super::*;
-
-    struct FakeProgressBar {}
-
-    impl TracksProgress for FakeProgressBar {
-        fn set_message(&self, _msg: String) {
-            ()
-        }
-        fn inc(&self, _delta: u64) {
-            ()
-        }
-        fn finish(&self) {
-            ()
-        }
-    }
 
     struct MockEval<F>
     where
@@ -148,11 +136,10 @@ mod test {
         }
     }
 
-    fn get_fake_output_config()
-    -> ProgressConfig<FakeProgressBar, impl Fn(u64) -> FakeProgressBar + Send + Sync> {
+    fn get_fake_output_config() -> ProgressConfig {
         ProgressConfig {
-            spinner: FakeProgressBar {},
-            progress_bar: |_len| FakeProgressBar {},
+            spinner: ProgressBar::hidden(),
+            progress_bar: Box::new(|_len| ProgressBar::hidden()),
         }
     }
 

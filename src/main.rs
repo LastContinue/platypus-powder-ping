@@ -1,16 +1,15 @@
 use anyhow::Result;
 use clap::Parser;
+use indicatif::ParallelProgressIterator;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use std::time::{Duration, Instant};
-
+use std::time::Instant;
 mod package;
 use package::{Darwin, GetsPackages, NixEval, Package};
 mod config;
 use config::{Config, ConfigPkgs, load_config, resolve_config_path};
 mod output;
 use output::{
-    ProgressConfig, TracksProgress, notify_updates, path_process_bar, query_flake_spinner, table,
-    update_string,
+    ProgressConfig, notify_updates, path_process_bar, query_flake_spinner, table, update_string,
 };
 
 #[derive(Parser, Debug)]
@@ -35,7 +34,7 @@ struct RunSummary {
 fn main() -> Result<()> {
     let now = Instant::now();
     let args = Args::parse();
-    let home = std::env::var("HOME").unwrap_or_default();
+    let home = std::env::var("HOME")?;
 
     let config_path = resolve_config_path(&args, &home);
     let cfg: Config = load_config(&config_path)?;
@@ -44,7 +43,7 @@ fn main() -> Result<()> {
 
     let progress_config = ProgressConfig {
         spinner: query_flake_spinner(),
-        progress_bar: |len| path_process_bar(len),
+        progress_bar: Box::new(|len| path_process_bar(len)),
     };
 
     let rs = run(&flake, cfg.pkgs, progress_config)?;
@@ -53,20 +52,16 @@ fn main() -> Result<()> {
     println!("{}", update_string(&rs.update_names));
 
     maybe_notify(args.notify, &rs.update_names, notify_updates)?;
-    maybe_benchmark(args.benchmark, now, |e| println!("Elapsed: {:.2?}", e));
+    maybe_benchmark(args.benchmark, || {
+        println!("Elapsed: {:.2?}", now.elapsed())
+    });
 
     Ok(())
 }
 
-fn run<G, TP, PF>(
-    flake: &G,
-    pkg_details: ConfigPkgs,
-    output_config: ProgressConfig<TP, PF>,
-) -> Result<RunSummary>
+fn run<G>(flake: &G, pkg_details: ConfigPkgs, output_config: ProgressConfig) -> Result<RunSummary>
 where
     G: GetsPackages + Sync,
-    TP: TracksProgress + Sync,
-    PF: Fn(u64) -> TP + Send,
 {
     let spinner_msg = format!(
         "Querying Darwin Flake\n  • location:'{}'\n  • config:  '{}'",
@@ -79,28 +74,23 @@ where
     let paths = flake.paths_from_flake_config()?;
     output_config.spinner.finish();
 
-    let pb_factory = output_config.progress_bar;
-    let progress_bar = pb_factory(paths.len() as u64);
+    let progress_bar = (output_config.progress_bar)(paths.len() as u64);
 
     progress_bar.set_message("Processing Paths".to_string());
-    let pb = &progress_bar;
 
     let options: Vec<Option<Package>> = paths
         .par_iter()
-        .map(|path| {
-            pb.inc(1);
-            flake.option_package_from_path(path, &pkg_details)
-        })
+        .progress_with(progress_bar)
+        .map(|path| flake.option_package_from_path(path, &pkg_details))
         .collect::<Result<Vec<Option<Package>>>>()?;
-
-    progress_bar.finish();
 
     let mut packages: Vec<Package> = options.into_iter().flatten().collect();
     packages.sort();
 
     let update_names: Vec<String> = packages
         .iter()
-        .filter_map(|p| p.update.as_ref().map(|_| p.name.clone()))
+        .filter(|p| p.update.is_some())
+        .map(|p| p.name.clone())
         .collect();
 
     Ok(RunSummary {
@@ -109,12 +99,12 @@ where
     })
 }
 
-fn maybe_benchmark<F>(benchmark: bool, now: Instant, f: F)
+fn maybe_benchmark<F>(benchmark: bool, f: F)
 where
-    F: FnOnce(Duration),
+    F: FnOnce(),
 {
     if benchmark {
-        f(now.elapsed());
+        f();
     }
 }
 
@@ -152,16 +142,14 @@ mod cli_tests {
     fn runs_when_benchmark_true() {
         let mut count = 0;
 
-        let now = Instant::now();
-
-        maybe_benchmark(true, now, |_| {
+        maybe_benchmark(true, || {
             count += 1;
         });
 
         assert_eq!(count, 1);
 
         let mut count2 = 0;
-        maybe_benchmark(false, now, |_| {
+        maybe_benchmark(false, || {
             count2 += 1;
         });
         assert_eq!(count2, 0);
@@ -170,6 +158,8 @@ mod cli_tests {
 
 #[cfg(test)]
 mod run_tests {
+    use indicatif::ProgressBar;
+
     use super::*;
     use std::collections::HashMap;
 
@@ -200,22 +190,6 @@ mod run_tests {
                 Some(Err(_e)) => Err(anyhow::anyhow!("fake flake error for path: {path}")),
                 _ => Ok(None),
             }
-        }
-    }
-
-    struct FakeProgressBar {}
-
-    impl TracksProgress for FakeProgressBar {
-        fn set_message(&self, _msg: String) {
-            ()
-        }
-
-        fn inc(&self, _delta: u64) {
-            ()
-        }
-
-        fn finish(&self) {
-            ()
         }
     }
 
@@ -269,9 +243,10 @@ mod run_tests {
     fn run_returns_packages() -> Result<()> {
         let (flake, fake_details, mut pkgs) = setup();
 
+        //If you ever mess with Indicatif, ::hidden will save you a bunch of generic code for mocking
         let output_config = ProgressConfig {
-            spinner: FakeProgressBar {},
-            progress_bar: |_len| FakeProgressBar {},
+            spinner: ProgressBar::hidden(),
+            progress_bar: Box::new(|_len| ProgressBar::hidden()),
         };
 
         let rs = run(&flake, fake_details, output_config)?;

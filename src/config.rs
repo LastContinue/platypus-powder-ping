@@ -74,4 +74,42 @@ mod tests {
 
         assert_eq!(resolved, "/home/testuser/.config/x.toml");
     }
+
+    #[test]
+    fn expands_tilde_path_with_tilde() {
+        let home = "/home/user";
+        let path_with_home = "/home/user/good/path";
+        let path_with_tilde = "~/good/path";
+
+        // Need to figure out how to do a table test for this
+        assert_eq!(
+            path_with_home,
+            expand_tilde_with_home(path_with_tilde, home)
+        );
+    }
+
+    #[test]
+    fn expands_tilde_plain_path() {
+        let home = "/home/user";
+        let regular_path = "/a/regular/path";
+        assert_eq!(
+            regular_path,
+            expand_tilde_with_home("/a/regular/path", home)
+        );
+    }
+
+    #[test]
+    fn expands_tilde_only_tilde() {
+        let home = "/home/user";
+        let only_tilde = "~";
+        assert_eq!(home, expand_tilde_with_home(only_tilde, home));
+    }
+
+    #[test]
+    fn expands_tilde_empty_string() {
+        let home = "/home/user";
+
+        let nothing = "";
+        assert_eq!(nothing, expand_tilde_with_home(nothing, home));
+    }
 }

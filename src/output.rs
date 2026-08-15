@@ -14,37 +14,9 @@ const NOTIFIER_APP: &str = "macos-notifier";
 const NOTIFIER_FALLBACK: &str = "osascript";
 const NOTIFICATION_TITLE: &str = "Nix Package Update";
 
-pub struct ProgressConfig<TP, PF>
-where
-    TP: TracksProgress + Sync,
-    PF: Fn(u64) -> TP + Send,
-    // Send + Sync needed because this will get passed into Rayon
-{
-    pub spinner: TP,
-    pub progress_bar: PF,
-}
-
-// This was done so we can mock ProgressBar
-pub trait TracksProgress {
-    fn set_message(&self, msg: String);
-    fn inc(&self, delta: u64);
-    fn finish(&self);
-}
-
-// Since we want our mocks to work just like ProgressBar,
-// these are all pass-through
-impl TracksProgress for ProgressBar {
-    fn set_message(&self, msg: String) {
-        self.set_message(msg)
-    }
-
-    fn inc(&self, delta: u64) {
-        self.inc(delta)
-    }
-
-    fn finish(&self) {
-        self.finish()
-    }
+pub struct ProgressConfig {
+    pub spinner: ProgressBar,
+    pub progress_bar: Box<dyn Fn(u64) -> ProgressBar + Send + Sync>,
 }
 
 pub fn notify_updates(updates: &[String]) -> Result<()> {
@@ -114,6 +86,8 @@ pub fn table(packages: &Vec<Package>) -> Table {
 pub fn update_string(update_names: &[String]) -> String {
     if update_names.is_empty() {
         "0 Updated Packages".to_string()
+    } else if update_names.len() == 1 {
+        format!("1 Updated Package - {}", update_names[0])
     } else {
         format!(
             "{} Updated Packages - {}",
@@ -166,5 +140,14 @@ mod test {
         let update_string = update_string(&update_names);
 
         assert_eq!(update_string, "0 Updated Packages")
+    }
+
+    #[test]
+    fn update_string_formats_correctly_for_one() {
+        let update_names = vec!["a-pkg".to_string()];
+
+        let update_string = update_string(&update_names);
+
+        assert_eq!(update_string, "1 Updated Package - a-pkg")
     }
 }
