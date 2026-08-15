@@ -41,7 +41,7 @@ pub fn notify_updates(updates: &[String]) -> Result<()> {
                 .arg("-e")
                 .arg(format!(
                     "display notification \"{}\" with title \"{}\"",
-                    &message, NOTIFICATION_TITLE
+                    message, NOTIFICATION_TITLE
                 ))
                 .output()
                 .context("failed to run `{NOTIFIER_FALLBACK}`")?,

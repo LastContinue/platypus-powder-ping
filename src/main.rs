@@ -60,7 +60,7 @@ fn main() -> Result<()> {
 
     let progress_config = ProgressConfig {
         spinner: query_flake_spinner(),
-        progress_bar: Box::new(|len| path_process_bar(len)),
+        progress_bar: Box::new(path_process_bar),
     };
 
     let rs = run(&flake, cfg.pkgs, progress_config)?;
