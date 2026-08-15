@@ -36,6 +36,7 @@ it easier for tabular output, progress spinners, progress bars, and putting into
 So I did! 🦀🦀🦀
 
 It will painfully clear to anyone who has ever programmed Rust that this was my first Rust project. There is at least some test coverage 🙏
+(just barely over 70% according to `cargo llvm-cov`)
 
 ## Setup
 
@@ -44,7 +45,7 @@ I use `direnv` on my machine, so doing `cd`ing to the dir and then doing `direnv
 
 `cargo test`, `cargo run` or `cargo build --release` then running the binary should get you up and running.
 
-Before you run the actual program (via `cargo run` or via the binary) you'll need a toml file at `./config/platypus-powder-ping/config.toml` (You can specific the file's location with the `-c` flag, but you will need a `config.toml` _somewhere_).
+Before you run the actual program (via `cargo run` or via the binary) you'll need a toml file at `./config/platypus-powder-ping/config.toml` (You can specify the file's location with the `-c` flag, but you will need a `config.toml` _somewhere_).
 
 You can just copy the `config.toml.example` to that location and cut off the `.example` part. I could probably make a bootstrap/install sh file for that, but "maybe later".
 
@@ -60,6 +61,7 @@ Blog post by author [here](https://thecoder.io/blog/native-macos-notifications-f
 <img width="360" height="97" alt="macos-notifier" src="https://github.com/user-attachments/assets/5c29a571-bb3f-43d3-a8e9-9d54b0c4c95b" />
 
 
+</br></br>
 > That is lame and I don't want to download anything
 
 No problem. If `macos-notifier` isn't on your path, it will notify with `osascript` which, IMHO, isn't that good looking, but "it'll work".
