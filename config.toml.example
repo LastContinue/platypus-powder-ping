@@ -1,6 +1,7 @@
 flake_dir = "/path_to_darwin_flake"
 # or ENV var like ${DARWIN_FLAKE}"
-flake_config_name= "default"
+
+flake_config_name = "default"
 # Defaults to (hostname -s) if not set
 
 [pkgs]
